@@ -3,68 +3,64 @@ import json
 
 
 
-class State:
-	num1 = 0 
-	num2 = 0
-		
-	
-	def __getattribute__(self, attr):
-		
-		if attr not in State.__dict__:
-			raise AttributeError
 
-		if not StateManager._check_if_attr_is_stored_data(attr):
+class State:
+
+	'''class which's "tunel" between StateManager and 'state.json' file'''
+
+	def __getattribute__(self, attr):
+
+		if not MetaStateManager._check_if_attr_is_stored_data(attr):
 
 			return super().__getattribute__(attr)
 
-		state_dict = StateManager._get_state_from_json_file()
+		state_dict = MetaStateManager._get_state_from_json_file()
 
 		return state_dict[attr]
 
 	def __setattr__(self, attr, value):
 
-		if attr not in State.__dict__:
-			raise AttributeError
-
-		if not StateManager._check_if_attr_is_stored_data(attr):
+		if not MetaStateManager._check_if_attr_is_stored_data(attr):
 			return super().__setattr__(attr, value)
 
-		state_dict = StateManager._get_state_from_json_file()
+		state_dict = MetaStateManager._get_state_from_json_file()
 
 		state_dict[attr] = value
 
-		StateManager._put_state_into_json_file(state_dict)
+		MetaStateManager._put_state_into_json_file(state_dict)
 
 	def __delattr__(self, attr):
-		raise TypeError
-
-	
-class Actions:
-
-	def calculate(self):		
-		print(StateManager.state.__dict__)
-		StateManager.state.__dict__['a'] = 1
-		#del StateManager.state.num1
-		StateManager.mutations.inc_num1()
-		StateManager.mutations.inc_num2()
-		result = StateManager.state.num1 + StateManager.state.num2
-		return result
-
-
-class Mutations:
-
-	def inc_num1(self):
-		StateManager.state.num1 += 1
-
-	def inc_num2(self):
-		StateManager.state.num2 += 1
-
+		raise TypeError("you can't remove attributes")
 
 
 class MetaStateManager(type):
 
+	'''metaclass which serves user state manager class'''
+
+	__state_manager = None
+	state = State()
+
 	def __init__(self, *args, **kwargs):
 
+		# checking wheather another user state manager exists
+		if MetaStateManager.__state_manager == None: 
+			
+			# checking wheather StoredDataSchema class is defined in user state manager
+			if 'StoredDataSchema' not in self.__dict__: 
+				raise TypeError(f"'StoredDataSchema' class isn't defined in '{self.__class__.__name__}' class")
+
+			# checking wheather StoredDataSchema class is instance of MetaStoredDataSchema
+			if type(self.StoredDataSchema) == MetaStoredDataSchema:
+				MetaStateManager.__state_manager = self
+			else:
+				raise TypeError("'StoredDataSchema' class must be an instance of 'MetaStoredDataSchema'")
+		else:
+			raise TypeError("Another instance of 'MetaStateManager' exists")
+
+		self.__init__ = MetaStateManager.__state_manager_init
+		self.state = MetaStateManager.state # to make 'state' instance attribute
+
+		# checking wheather 'state.json' exists
 		if not os.path.exists('state.json'):
 			MetaStateManager._set_default_state()
 		else:
@@ -74,64 +70,79 @@ class MetaStateManager(type):
 			if data == "":
 				MetaStateManager._set_default_state()
 
+	def __state_manager_init(self, *args, **kwargs):
+
+		'''__init__ method for user state manager class'''
+		
+		raise TypeError(f"'{self.__class__.__name__}' can't have any instances")
+
+
 	@staticmethod
 	def _put_state_into_json_file(state_dict):
 		
+		'''Get dictionary object as an arguement and put it into 'state.json' file'''
+
 		with open('state.json', 'w') as file:
 			file.write(str(json.dumps(state_dict, sort_keys=True, indent=4)))
 
 	@staticmethod
-	def _set_default_state():
-		state_dict = {}
-
-		for attr in State.__dict__:
-			if MetaStateManager._check_if_attr_is_stored_data(attr):
-				state_dict[attr] = State.__dict__[attr]
-
-		MetaStateManager._put_state_into_json_file(state_dict)
-
-	@classmethod
-	def _check_if_attr_is_stored_data(cls, attr):
-		
-		if type(State.__dict__[attr]).__name__ not in ('function', 'method', 'classmethod') and not attr.startswith('__'):
-
-			return True
-
-		return False
-
-	@staticmethod
 	def _get_state_from_json_file():
+
+		'''Get state from 'state.json' file and return dictionary object of it'''
 		
 		with open('state.json', 'r') as file:
 			state_dict = json.load(file)
 
 		return state_dict
 
-class StateManager(metaclass=MetaStateManager):
+	@classmethod
+	def _set_default_state(cls):
+
+		'''Set default state based in 'StoredDataSchema' class'''
+
+		state_dict = {}
+
+		for attr in cls._get_stored_data_schema().__dict__:
+			if cls._check_if_attr_is_stored_data(attr):
+				state_dict[attr] = cls._get_stored_data_schema().__dict__[attr]
+
+		cls._put_state_into_json_file(state_dict)
+
+	@classmethod
+	def _check_if_attr_is_stored_data(cls, attr):
+
+		'''Check if the attribute is stored data'''
+
+		key_error_raised = False
+
+		try:
+			if type(cls._get_stored_data_schema().__dict__[attr]).__name__ not in ('function', 'method') \
+					and not attr.startswith('__'):
+
+				return True
+		except KeyError:
+			key_error_raised = True
+		
+		if key_error_raised:
+			raise AttributeError(f"type object 'StateManager' has no attribute '{attr}'")
+
+		return False
+
+	@classmethod
+	def _get_stored_data_schema(cls):
+
+		'''Return 'StoredDataSchema' class of user state manager class'''
+
+		return cls.__state_manager.StoredDataSchema
 
 
-	state = State()
-	actions = Actions()
-	mutations = Mutations()
+	
+class MetaStoredDataSchema(type):
 
-	def __init__(self, *args, **kwargs):
+	'''metaclass for 'StoredDataSchema' class'''
+
+	def __setattr__(self, attr, value):
 		raise TypeError
 
-	
-
-	
-
-	
-
-
-if __name__ == "__main__":
-	#print(StateManager)
-	for i in range(5):
-		print(StateManager.actions.calculate())
-
-	#state_manager = StateManager()
-	#print(StateManager._get_state_from_json_file())
-
-
-	#StateManager._set_default_state()
-
+	def __delattr__(self, attr):
+		raise TypeError
