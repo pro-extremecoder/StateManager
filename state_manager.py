@@ -56,6 +56,12 @@ class Cache:
 		else:
 			raise AttributeError(f"type object 'Cache' has no attribute '{attr}'")
 
+	def __delattr__(self, attr):
+		raise TypeError("type object 'Cache' can't remove attributes")
+
+	def __delitem__(self, item):
+		raise TypeError("type object 'Cache' can't remove dictionary items")
+
 	def __getitem__(self, item):
 		return self.__dict__[item]
 
