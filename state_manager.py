@@ -10,15 +10,21 @@ class State:
 
 	def __getattribute__(self, attr):
 
-		if not MetaStateManager._check_if_attr_is_stored_data(attr):
-			return super().__getattribute__(attr)
+		if attr not in MetaStateManager._default_stored_data:
+			if attr in State.__dict__:
+				return super().__getattribute__(attr)
+			else:
+				raise AttributeError(f"type object 'StoredDataSchema' has no attribute '{attr}'")
 
 		return MetaStateManager._cache[attr]
 
 	def __setattr__(self, attr, value):
 
-		if not MetaStateManager._check_if_attr_is_stored_data(attr):
-			return super().__setattr__(attr, value)
+		if attr not in MetaStateManager._default_stored_data:
+			if attr in State.__dict__:
+				return super().__setattr__(attr, value)
+			else:
+				raise AttributeError(f"type object 'StoredDataSchema' has no attribute '{attr}'")
 
 		cached_state = MetaStateManager._cache.get_cached_state().copy()
 		cached_state[attr] = value
@@ -72,6 +78,7 @@ class MetaStateManager(type):
 
 	__state_manager = None
 	_cache = None
+	_default_stored_data = None
 	state = State()
 
 	def __init__(self, *args, **kwargs):
@@ -94,6 +101,10 @@ class MetaStateManager(type):
 		self.__init__ = MetaStateManager.__state_manager_init
 		self.state = MetaStateManager.state # to make 'state' instance attribute
 
+		MetaStateManager._default_stored_data = MetaStateManager._get_stored_data_schema()._get_default_stored_data()
+
+		print(MetaStateManager._default_stored_data)
+
 		# checking wheather 'state.json' exists
 		if not os.path.exists('state.json'):
 			MetaStateManager._set_default_state()
@@ -112,6 +123,7 @@ class MetaStateManager(type):
 		'''__init__ method for user state manager class'''
 		
 		raise TypeError(f"'{self.__class__.__name__}' can't have any instances")
+
 
 	@classmethod
 	def _put_state_into_json_file(cls, state_dict):
@@ -145,33 +157,7 @@ class MetaStateManager(type):
 
 		'''Set default state based in 'StoredDataSchema' class'''
 
-		state_dict = {}
-
-		for attr in cls._get_stored_data_schema().__dict__:
-			if cls._check_if_attr_is_stored_data(attr):
-				state_dict[attr] = cls._get_stored_data_schema().__dict__[attr]
-
-		cls._put_state_into_json_file(state_dict)
-
-	@classmethod
-	def _check_if_attr_is_stored_data(cls, attr):
-
-		'''Check if the attribute is stored data'''
-
-		key_error_raised = False
-
-		try:
-			if type(cls._get_stored_data_schema().__dict__[attr]).__name__ not in ('function', 'method') \
-					and not attr.startswith('__'):
-
-				return True
-		except KeyError:
-			key_error_raised = True
-		
-		if key_error_raised:
-			raise AttributeError(f"type object 'StoredDataSchema' has no attribute '{attr}'")
-
-		return False
+		cls._put_state_into_json_file(cls._default_stored_data)
 
 	@classmethod
 	def _get_stored_data_schema(cls):
@@ -186,8 +172,33 @@ class MetaStoredDataSchema(type):
 
 	'''metaclass for 'StoredDataSchema' class'''
 
+	def __init__(self, *args, **kwargs):
+
+		default_stored_data = self._get_default_stored_data()
+
+		for attr, value in self.__dict__.items():
+			if not attr.startswith('__') and attr not in default_stored_data:
+				attr_type = type(value).__name__
+				raise TypeError(f"type object 'StoredDataSchema' can't have a '{attr_type}' type attribute")
+
+	def _get_default_stored_data(self):
+
+		'''Return default stored data schema as dictionary'''
+		
+		default_stored_data = {}
+		unallowed_types = ('function', 'classmethod', 'staticmethod')
+		
+		for attr, value in self.__dict__.items():
+			
+			attr_type = type(self.__dict__[attr]).__name__
+			
+			if attr_type not in unallowed_types and not attr.startswith('__'):  
+				default_stored_data[attr] = value
+
+		return default_stored_data
+
 	def __setattr__(self, attr, value):
-		raise TypeError
+		raise TypeError("type object 'StoredDataSchema' can't set attributes")
 
 	def __delattr__(self, attr):
-		raise TypeError
+		raise TypeError("type object 'StoredDataSchema' can't remove attributes")
