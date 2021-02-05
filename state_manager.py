@@ -109,8 +109,6 @@ class MetaStateManager(type):
 
 		MetaStateManager._default_stored_data = MetaStateManager._get_stored_data_schema()._get_default_stored_data()
 
-		print(MetaStateManager._default_stored_data)
-
 		# checking wheather 'state.json' exists
 		if not os.path.exists('state.json'):
 			MetaStateManager._set_default_state()
@@ -120,8 +118,26 @@ class MetaStateManager(type):
 
 			if data == "":
 				MetaStateManager._set_default_state()
+			elif not MetaStateManager._json_file_structure_is_correct():
+				raise TypeError("'state.json' data structure doesn't correspond to 'StoredDataSchema'")
 
 		MetaStateManager._cache = Cache(MetaStateManager._get_state_from_json_file())
+
+	@classmethod
+	def _json_file_structure_is_correct(cls):
+
+		'''Checking wheather 'state.json' file structure is correct'''
+		
+		state_from_json = cls._get_state_from_json_file()
+
+		default_state = cls._get_stored_data_schema()._get_default_stored_data()
+
+		if set(default_state.keys()) == set(state_from_json):
+			return True
+
+		return False
+
+
 
 
 	def __state_manager_init(self, *args, **kwargs):
